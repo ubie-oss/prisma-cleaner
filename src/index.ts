@@ -40,7 +40,7 @@ export class PrismaCleaner {
     );
   }
 
-  extension() {
+  withCleaner() {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
 
