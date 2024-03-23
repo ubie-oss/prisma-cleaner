@@ -57,19 +57,19 @@ export class PrismaCleaner {
     });
   }
 
-  async cleanAllTables(): Promise<void> {
+  async cleanupAllTables(): Promise<void> {
     const tables = await this.getTables();
     const targets = tables.map(({ table, schema }) => `"${schema}"."${table}"`);
     await this.prisma.$queryRawUnsafe(`TRUNCATE TABLE ${targets.join(", ")}`);
   }
 
-  async cleanTables(tables: string[]): Promise<void> {
+  async cleanupTables(tables: string[]): Promise<void> {
     await this.prisma.$queryRawUnsafe(
       `TRUNCATE TABLE ${tables.join(", ")} CASCADE`,
     );
   }
 
-  async clean(): Promise<void> {
+  async cleanup(): Promise<void> {
     if (this.cleanupTargetModels.size === 0) return;
 
     const targetTableNames = Array.from(this.cleanupTargetModels)
