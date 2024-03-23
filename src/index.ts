@@ -118,6 +118,7 @@ export class PrismaCleaner {
 SELECT table_name AS table, table_schema AS schema
 FROM information_schema.tables
 WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+AND table_name != '_prisma_migrations'
   `.trim(),
     );
     return this.tables;
