@@ -22,7 +22,7 @@ const targetOperations = ["create", "createMany", "upsert"];
 export class PrismaCleaner {
   private readonly prisma: PrismaClientLike;
   private readonly cleanupTargetModels = new Set<string>();
-  private readonly tableByModel = new Map<string, string | null>();
+  private readonly tableByModel = new Map<string, string>();
 
   private tables: Table[] | null = null;
   private schemaListByTableName: Record<string, string[]> | null = null;
@@ -36,7 +36,7 @@ export class PrismaCleaner {
   }) {
     this.prisma = prisma;
     this.tableByModel = new Map(
-      models.map((model) => [model.name, model.dbName]),
+      models.map((model) => [model.name, model.dbName || model.name]),
     );
   }
 
