@@ -35,7 +35,6 @@ module.exports = {
       },
     ],
     "unused-imports/no-unused-imports": "error",
-    "import/no-default-export": "error",
     "import/no-anonymous-default-export": "error",
     "import/no-duplicates": "error",
     "import/order": [
@@ -63,6 +62,12 @@ module.exports = {
         "@typescript-eslint/consistent-type-assertions": "off",
         "@typescript-eslint/no-explicit-any": "off",
         "no-control-regex": "off",
+      },
+    },
+    {
+      files: ["example/**/*.ts"],
+      rules: {
+        "no-console": "off",
       },
     },
   ],
