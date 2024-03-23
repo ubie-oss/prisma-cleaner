@@ -77,6 +77,10 @@ export class PrismaCleaner {
       })
       .filter((table): table is string => table != null);
     const schemaListByTableName = await this.getSchemaListByTableName();
+
+    // If the multiSchema feature is enabled, we don't know how to obtain the schema name from the model,
+    // so we instead get the schema name from the table name. Also, we don't know which schema the model
+    // belongs to, so we delete the table with the same name from all schemas.
     const targets = targetTableNames
       .flatMap((table) => {
         return schemaListByTableName[table].map(
@@ -85,6 +89,7 @@ export class PrismaCleaner {
       })
       .filter((t) => t != null);
     if (targets.length === 0) return;
+
     await this.prisma.$queryRawUnsafe(
       `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
     );
