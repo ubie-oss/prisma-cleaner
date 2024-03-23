@@ -20,6 +20,7 @@ module.exports = {
     "no-process-env": "error",
     "@typescript-eslint/no-empty-function": "off",
     "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-this-alias": "off",
     "@typescript-eslint/consistent-type-assertions": [
       "error",
       {
