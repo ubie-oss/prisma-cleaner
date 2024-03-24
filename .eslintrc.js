@@ -2,7 +2,7 @@ module.exports = {
   env: {
     node: true,
   },
-  ignorePatterns: ["dist/"],
+  ignorePatterns: ["dist/", "__generated__/"],
   parserOptions: {
     ecmaVersion: "es2021",
   },
