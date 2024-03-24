@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { UserService } from "./UserService";
 import { cleaner } from "../test/cleaner";
 
-describe("user", () => {
+describe("UserService", () => {
   const prisma = new PrismaClient().$extends(
     cleaner.withCleaner(),
   ) as PrismaClient;

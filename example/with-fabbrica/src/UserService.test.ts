@@ -5,7 +5,7 @@ import { cleaner } from "../test/cleaner";
 
 const UserFactory = defineUserFactory();
 
-describe("user", () => {
+describe("UserService", () => {
   const prisma = new PrismaClient().$extends(
     cleaner.withCleaner(),
   ) as PrismaClient;
