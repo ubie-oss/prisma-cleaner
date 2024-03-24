@@ -10,7 +10,7 @@
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts"]
 }
