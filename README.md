@@ -17,13 +17,13 @@ const prisma = new PrismaClient().$extends(cleaner.withCleaner());
   await prisma.user.create({ ... });
 
   // Delete only user table
-  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."User" CASCADE
+  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."user" CASCADE
 
   await prisma.user.create({ ... });
-  await prisma.post.create({ ... });
+  await prisma.comment.create({ ... });
 
-  // Delete user and post tables
-  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."User", "public"."Post" CASCADE
+  // Delete post and comment tables, user table is not included
+  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."post", "public"."comment" CASCADE
 })();
 ```
 
