@@ -40,8 +40,6 @@ $ npm install --save-dev @ubie/prisma-cleaner
 
 ### with jest
 
-Example code is [here](https://github.com/ubie-oss/prisma-cleaner/blob/main//example/with-jest).
-
 #### Application code
 
 ```typescript
@@ -52,11 +50,16 @@ export const prisma = new PrismaClient();
 ```
 
 ```typescript
-// ./src/user.ts
-import { prisma } from "./client";
+// ./src/UserService.ts
+import type { PrismaClient } from "@prisma/client";
 
-export function createUser(data: { name: string }) {
-  return prisma.user.create({ data });
+export class UserService {
+  constructor(private readonly prisma: PrismaClient) {}
+  createUser(name: string) {
+    return this.prisma.user.create({
+      data: { name },
+    });
+  }
 }
 ```
 
@@ -66,13 +69,13 @@ export function createUser(data: { name: string }) {
 // jest.config.ts
 const config: Config = {
   // ...
-  globalSetup: "<rootDir>/global-setup.ts",
-  setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+  globalSetup: "<rootDir>/test/global-setup.ts",
+  setupFilesAfterEnv: ["<rootDir>/test/setup.ts"],
 };
 ```
 
 ```typescript
-// cleander.ts
+// ./test/cleander.ts
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaCleaner } from "@ubie/prisma-cleaner";
 
@@ -83,7 +86,7 @@ export const cleaner = new PrismaCleaner({
 ```
 
 ```typescript
-// global-setup.ts
+// ./test/global-setup.ts
 import { cleaner } from "./cleaner";
 
 export default async function setup() {
@@ -93,15 +96,9 @@ export default async function setup() {
 ```
 
 ```typescript
-// setup.ts
+// ./test/setup.ts
 import { PrismaClient } from "@prisma/client";
 import { cleaner } from "./cleaner";
-
-jest.mock("./src/client", () => {
-  return {
-    prisma: new PrismaClient().$extends(cleaner.withCleaner()),
-  };
-});
 
 afterEach(async () => {
   await cleaner.cleanup();
@@ -111,15 +108,19 @@ afterEach(async () => {
 #### Test code
 
 ```typescript
-// ./src/user.test.ts
-import { prisma } from "./client";
-import { createUser } from "./user";
+// ./src/UserService.test.ts
+import { PrismaClient } from "@prisma/client";
+import { UserService } from "./UserService";
+import { cleaner } from "../test/cleaner";
 
-describe("user", () => {
+describe("UserService", () => {
+  const prisma = new PrismaClient().$extends(cleaner.withCleaner()) as PrismaClient;
+  const userService = new UserService(prisma);
+
   it("should create a new user", async () => {
     // this record will delete by prisma-cleaner in afterEach defined by setup.ts
-    const created = await createUser("xxx");
-    expect(created.name).toEqual("xxx");
+    const user = await userService.createUser("xxx");
+    expect(user.name).toEqual("xxx");
     expect(await prisma.user.count()).toEqual(1);
   });
 
@@ -129,6 +130,8 @@ describe("user", () => {
   });
 });
 ```
+
+See more [examples](https://github.com/ubie-oss/prisma-cleaner/blob/main//example/with-jest).
 
 ### manually cleanup
 
