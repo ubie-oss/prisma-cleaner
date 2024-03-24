@@ -63,8 +63,18 @@ export class PrismaCleaner {
   }
 
   async cleanupTables(tables: string[]): Promise<void> {
+    const targets = tables.map((target) => {
+      if (/^".*"$/.test(target)) return target;
+
+      const [schemaOrTable, table] = target.split(".");
+      if (table) {
+        return `"${schemaOrTable}"."${table}"`;
+      } else {
+        return `"${schemaOrTable}"`;
+      }
+    });
     await this.prisma.$queryRawUnsafe(
-      `TRUNCATE TABLE ${tables.join(", ")} CASCADE`,
+      `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
     );
   }
 

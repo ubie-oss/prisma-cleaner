@@ -32,7 +32,7 @@
   "homepage": "https://github.com/ubie-oss/prisma-cleaner",
   "scripts": {
     "build": "rm -rf dist && tsc && tsc -p tsconfig.cjs.json",
-    "prepublishOnly": "npm run build",
+    "test:prepare": "cd test && prisma migrate dev && prisma generate",
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "eslint --fix . && prettier --write ."
@@ -41,6 +41,7 @@
     "@prisma/client": "*"
   },
   "devDependencies": {
+    "@prisma/client": "^5.11.0",
     "@types/node": "^20.11.27",
     "@typescript-eslint/eslint-plugin": "^7.3.1",
     "@typescript-eslint/parser": "^7.3.1",
@@ -49,6 +50,7 @@
     "eslint-plugin-import": "^2.29.1",
     "eslint-plugin-unused-imports": "^3.1.0",
     "prettier": "^3.2.5",
+    "prisma": "^5.11.0",
     "typescript": "^5.4.2",
     "vitest": "^1.3.1"
   }
