@@ -3,8 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch --preserveWatchOutput",
-    "generate": "prisma generate",
-    "migrate": "prisma db push",
+    "test:prepare": "prisma db push && prisma generate",
     "test": "jest"
   },
   "dependencies": {

@@ -2,8 +2,7 @@
   "name": "with-vitest-example",
   "private": true,
   "scripts": {
-    "generate": "prisma generate",
-    "migrate": "prisma db push",
+    "test:prepare": "prisma db push && prisma generate",
     "test": "vitest run"
   },
   "dependencies": {
