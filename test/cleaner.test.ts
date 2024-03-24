@@ -27,7 +27,7 @@ describe("PrismaCleaner", () => {
 
   test("manually cleanup", async () => {
     const insert = () =>
-      prisma.$queryRawUnsafe(`insert into "User" (email) values ('xxx')`);
+      prisma.$executeRaw`insert into "User" (email) values ('xxx')`;
 
     await insert();
     expect(await prisma.user.count()).toBe(1);
