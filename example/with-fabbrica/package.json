@@ -1,0 +1,22 @@
+{
+  "name": "with-jest-example",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma db push",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.11.0"
+  },
+  "devDependencies": {
+    "@quramy/prisma-fabbrica": "^2.1.1",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.30",
+    "jest": "^29.7.0",
+    "prisma": "^5.11.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3"
+  }
+}
