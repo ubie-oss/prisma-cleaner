@@ -7,11 +7,6 @@ datasource db {
   url      = "postgresql://postgres@localhost:5432/prisma_cleaner"
 }
 
-generator fabbrica {
-  provider    = "prisma-fabbrica"
-  noTranspile = true
-}
-
 model User {
   id    Int    @id @default(autoincrement())
   name  String

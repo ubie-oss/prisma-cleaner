@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaCleaner } from "../../src";
+import { PrismaCleaner } from "../../../src";
 
 export const cleaner = new PrismaCleaner({
   prisma: new PrismaClient(),

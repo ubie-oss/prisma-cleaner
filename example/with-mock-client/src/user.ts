@@ -1,4 +1,4 @@
-import { prisma } from "./client";
+import { prisma } from "./prisma";
 
 export function createUser(name: string) {
   return prisma.user.create({

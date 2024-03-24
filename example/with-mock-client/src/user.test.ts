@@ -1,11 +1,11 @@
-import { prisma } from "./client";
+import { prisma } from "./prisma";
 import { createUser } from "./user";
 
 describe("user", () => {
   it("should create a new user", async () => {
     // this record will delete by prisma-cleaner in afterEach defined by setup.ts
-    const created = await createUser("xxx");
-    expect(created.name).toEqual("xxx");
+    const user = await createUser("xxx");
+    expect(user.name).toEqual("xxx");
     expect(await prisma.user.count()).toEqual(1);
   });
 

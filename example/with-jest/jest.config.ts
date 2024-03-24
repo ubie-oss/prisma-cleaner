@@ -9,8 +9,8 @@ const config: Config = {
     "^.+\\.ts$": "ts-jest",
   },
   maxWorkers: 1,
-  globalSetup: "<rootDir>/global-setup.ts",
-  setupFilesAfterEnv: ["<rootDir>/setup.ts"],
+  globalSetup: "<rootDir>/test/global-setup.ts",
+  setupFilesAfterEnv: ["<rootDir>/test/setup.ts"],
 };
 
 export default config;
