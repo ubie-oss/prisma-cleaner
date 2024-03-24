@@ -16,7 +16,7 @@ describe("PrismaCleaner", () => {
   test("cleanup user table", async () => {
     await prisma.user.create({
       data: {
-        email: "xxx",
+        name: "xxx",
       },
     });
     expect(await prisma.user.count()).toBe(1);
@@ -27,7 +27,7 @@ describe("PrismaCleaner", () => {
 
   test("manually cleanup", async () => {
     const insert = () =>
-      prisma.$executeRaw`insert into "User" (email) values ('xxx')`;
+      prisma.$executeRaw`insert into "User" (name) values ('xxx')`;
 
     await insert();
     expect(await prisma.user.count()).toBe(1);

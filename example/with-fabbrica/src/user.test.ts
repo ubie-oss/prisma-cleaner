@@ -8,10 +8,9 @@ describe("user", () => {
   it("should create a new user", async () => {
     // this record will delete by prisma-cleaner in afterEach defined by setup.ts
     const created = await createUser("xxx");
-    expect(created.email).toEqual("xxx");
+    expect(created.name).toEqual("xxx");
 
-    const user = await UserFactory.create();
-    expect(user).toBeDefined();
+    await UserFactory.create();
 
     expect(await prisma.user.count()).toEqual(2);
   });

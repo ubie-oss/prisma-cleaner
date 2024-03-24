@@ -55,8 +55,8 @@ export const prisma = new PrismaClient();
 // ./src/user.ts
 import { prisma } from "./client";
 
-export function createUser(email: string) {
-  return prisma.user.create({ ... });
+export function createUser(data: { name: string }) {
+  return prisma.user.create({ data });
 }
 ```
 
@@ -119,7 +119,7 @@ describe("user", () => {
   it("should create a new user", async () => {
     // this record will delete by prisma-cleaner in afterEach defined by setup.ts
     const created = await createUser("xxx");
-    expect(created.email).toEqual("xxx");
+    expect(created.name).toEqual("xxx");
     expect(await prisma.user.count()).toEqual(1);
   });
 
@@ -135,7 +135,7 @@ describe("user", () => {
 Prisma-cleaner adds tables targeted for deletion triggered by the execution of Prisma's `create`, `createMany`, `upsert`. If added via `$executeRaw` or similar, they will not be automatically deleted, so you will need to manually delete them.
 
 ```typescript
-await prisma.$executeRaw`INSERT INTO "User" (email) VALUES ('xxx')`;
+await prisma.$executeRaw`INSERT INTO "User" (name) VALUES ('xxx')`;
 
 // You should delete manually.
 await cleaner.cleanupTables(["User"]);

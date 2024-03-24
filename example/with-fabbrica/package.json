@@ -1,5 +1,5 @@
 {
-  "name": "with-jest-example",
+  "name": "with-fabbrica-example",
   "private": true,
   "scripts": {
     "generate": "prisma generate",

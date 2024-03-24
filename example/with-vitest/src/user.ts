@@ -1,10 +1,8 @@
 import { prisma } from "./client";
 
-export function createUser(email: string) {
+export function createUser(name: string) {
   return prisma.user.create({
-    data: {
-      email,
-    },
+    data: { name },
   });
 }
 
