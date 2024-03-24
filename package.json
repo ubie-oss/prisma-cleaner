@@ -32,7 +32,7 @@
   "homepage": "https://github.com/ubie-oss/prisma-cleaner",
   "scripts": {
     "build": "rm -rf dist && tsc && tsc -p tsconfig.cjs.json",
-    "test:prepare": "cd test && prisma migrate dev && prisma generate",
+    "test:prepare": "prisma db push && prisma generate",
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "eslint --fix . && prettier --write ."

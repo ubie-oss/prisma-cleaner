@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "generate": "prisma generate",
-    "migrate": "prisma migrate dev",
+    "migrate": "prisma db push",
     "test": "jest"
   },
   "dependencies": {
