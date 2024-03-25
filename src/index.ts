@@ -181,14 +181,26 @@ AND table_name != '_prisma_migrations'
 
     for (const [key, value] of Object.entries(data)) {
       if (!isPlainObject(value)) continue;
-      if (isPlainObject(value.create)) {
+
+      // create
+      if (Array.isArray(value.create)) {
+        this.addTargetModelByInputData(modelName, value.create);
+      } else if (isPlainObject(value.create)) {
         const field = model.fields.find((f) => f.name === key);
         if (field) {
           this.cleanupTargetModels.add(field.type);
           this.addTargetModelByInputData(field.type, value.create);
         }
       }
-      if (
+
+      // connectOrCreate
+      if (Array.isArray(value.connectOrCreate)) {
+        value.connectOrCreate.forEach((v) => {
+          if (isPlainObject(v.create)) {
+            this.addTargetModelByInputData(modelName, v.create);
+          }
+        });
+      } else if (
         isPlainObject(value.connectOrCreate) &&
         isPlainObject(value.connectOrCreate.create)
       ) {

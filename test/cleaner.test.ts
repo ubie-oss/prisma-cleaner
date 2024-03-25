@@ -45,27 +45,72 @@ describe("PrismaCleaner", () => {
   });
 
   test("with nesting", async () => {
-    await prisma.comment.create({
+    await prisma.post.create({
       data: {
-        body: "xxx",
-        post: {
-          create: {
-            title: "yyy",
-            content: "zzz",
-            user: {
-              connectOrCreate: {
-                where: {
-                  id: 1,
-                },
-                create: {
-                  name: "foo",
+        title: "yyy",
+        content: "zzz",
+        comment: {
+          create: [
+            {
+              body: "foo",
+              user: {
+                connectOrCreate: {
+                  where: {
+                    id: 1,
+                  },
+                  create: {
+                    name: "foo",
+                  },
                 },
               },
             },
-          },
+            {
+              body: "bar",
+            },
+          ],
         },
       },
     });
+    expect(await prisma.user.count()).toBe(1);
+    expect(await prisma.post.count()).toBe(1);
+    expect(await prisma.comment.count()).toBe(2);
+
+    await cleaner.cleanup();
+    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.post.count()).toBe(0);
+    expect(await prisma.comment.count()).toBe(0);
+  });
+
+  test("many connectOrCreate", async () => {
+    await prisma.post.create({
+      data: {
+        title: "yyy",
+        content: "zzz",
+        comment: {
+          connectOrCreate: [
+            {
+              where: { id: 1 },
+              create: {
+                body: "foo",
+                user: {
+                  create: {
+                    name: "x",
+                  },
+                },
+              },
+            },
+            {
+              where: { id: 2 },
+              create: { body: "bar" },
+            },
+          ],
+        },
+      },
+    });
+    expect(await prisma.user.count()).toBe(1);
+    expect(await prisma.post.count()).toBe(1);
+    expect(await prisma.comment.count()).toBe(2);
+
     await cleaner.cleanup();
     expect(await prisma.user.count()).toBe(0);
     expect(await prisma.post.count()).toBe(0);
