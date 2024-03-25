@@ -117,6 +117,19 @@ describe("PrismaCleaner", () => {
     expect(await prisma.comment.count()).toBe(0);
   });
 
+  test("createMany", async () => {
+    await prisma.post.createMany({
+      data: [
+        { title: "a", content: "b" },
+        { title: "x", content: "y" },
+      ],
+    });
+    expect(await prisma.post.count()).toBe(2);
+
+    await cleaner.cleanup();
+    expect(await prisma.post.count()).toBe(0);
+  });
+
   test("manually cleanup", async () => {
     const insert = () =>
       prisma.$executeRaw`insert into "User" (name) values ('xxx')`;
