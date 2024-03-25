@@ -25,6 +25,25 @@ describe("PrismaCleaner", () => {
     expect(await prisma.user.count()).toBe(0);
   });
 
+  test("with transaction", async () => {
+    await prisma.$transaction(async (client) => {
+      await client.user.create({
+        data: {
+          name: "foo",
+        },
+      });
+      await client.user.create({
+        data: {
+          name: "bar",
+        },
+      });
+    });
+    expect(await prisma.user.count()).toBe(2);
+
+    await cleaner.cleanup();
+    expect(await prisma.user.count()).toBe(0);
+  });
+
   test("manually cleanup", async () => {
     const insert = () =>
       prisma.$executeRaw`insert into "User" (name) values ('xxx')`;
