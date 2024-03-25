@@ -44,6 +44,34 @@ describe("PrismaCleaner", () => {
     expect(await prisma.user.count()).toBe(0);
   });
 
+  test("with nesting", async () => {
+    await prisma.comment.create({
+      data: {
+        body: "xxx",
+        post: {
+          create: {
+            title: "yyy",
+            content: "zzz",
+            user: {
+              connectOrCreate: {
+                where: {
+                  id: 1,
+                },
+                create: {
+                  name: "foo",
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    await cleaner.cleanup();
+    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.post.count()).toBe(0);
+    expect(await prisma.comment.count()).toBe(0);
+  });
+
   test("manually cleanup", async () => {
     const insert = () =>
       prisma.$executeRaw`insert into "User" (name) values ('xxx')`;

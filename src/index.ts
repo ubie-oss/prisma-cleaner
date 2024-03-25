@@ -10,6 +10,11 @@ type PrismaClientLike = {
 type ModelLike = {
   name: string;
   dbName: string | null;
+  fields: readonly {
+    name: string;
+    kind: string;
+    type: string;
+  }[];
 };
 
 type Table = {
@@ -19,10 +24,24 @@ type Table = {
 
 const targetOperations = ["create", "createMany", "upsert"];
 
+function isPlainObject(obj: unknown): obj is Record<string, unknown> {
+  return obj != null && Object.getPrototypeOf(obj) === Object.prototype;
+}
+
 export class PrismaCleaner {
   private readonly prisma: PrismaClientLike;
   private readonly cleanupTargetModels = new Set<string>();
-  private readonly tableByModel = new Map<string, string>();
+  private readonly modelsMap = new Map<
+    string, // model name
+    {
+      table: string;
+      fields: readonly {
+        name: string;
+        kind: string;
+        type: string;
+      }[];
+    }
+  >();
 
   private tables: Table[] | null = null;
   private schemaListByTableName: Record<string, string[]> | null = null;
@@ -35,8 +54,14 @@ export class PrismaCleaner {
     models: readonly ModelLike[] | ModelLike[];
   }) {
     this.prisma = prisma;
-    this.tableByModel = new Map(
-      models.map((model) => [model.name, model.dbName || model.name]),
+    this.modelsMap = new Map(
+      models.map((model) => [
+        model.name,
+        {
+          table: model.dbName || model.name,
+          fields: model.fields,
+        },
+      ]),
     );
   }
 
@@ -49,6 +74,7 @@ export class PrismaCleaner {
         async $allOperations({ operation, model, args, query }) {
           if (model && targetOperations.includes(operation)) {
             self.cleanupTargetModels.add(model);
+            self.addTargetModelByArgs(model, args);
           }
           return query(args);
         },
@@ -83,7 +109,7 @@ export class PrismaCleaner {
 
     const targetTableNames = Array.from(this.cleanupTargetModels)
       .map((model) => {
-        return this.tableByModel.get(model);
+        return this.modelsMap.get(model)?.table;
       })
       .filter((table): table is string => table != null);
     const schemaListByTableName = await this.getSchemaListByTableName();
@@ -136,5 +162,45 @@ AND table_name != '_prisma_migrations'
   `.trim(),
     );
     return this.tables;
+  }
+
+  private addTargetModelByArgs(modelName: string, args: unknown): void {
+    if (!isPlainObject(args)) return;
+    this.addTargetModelByInputData(modelName, args.data);
+  }
+
+  private addTargetModelByInputData(modelName: string, data: unknown): void {
+    const model = this.modelsMap.get(modelName);
+    if (!model) return;
+
+    if (Array.isArray(data)) {
+      data.forEach((d) => this.addTargetModelByInputData(modelName, d));
+      return;
+    }
+    if (!isPlainObject(data)) return;
+
+    for (const [key, value] of Object.entries(data)) {
+      if (!isPlainObject(value)) continue;
+      if (isPlainObject(value.create)) {
+        const field = model.fields.find((f) => f.name === key);
+        if (field) {
+          this.cleanupTargetModels.add(field.type);
+          this.addTargetModelByInputData(field.type, value.create);
+        }
+      }
+      if (
+        isPlainObject(value.connectOrCreate) &&
+        isPlainObject(value.connectOrCreate.create)
+      ) {
+        const field = model.fields.find((f) => f.name === key);
+        if (field) {
+          this.cleanupTargetModels.add(field.type);
+          this.addTargetModelByInputData(
+            field.type,
+            value.connectOrCreate.create,
+          );
+        }
+      }
+    }
   }
 }
