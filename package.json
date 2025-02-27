@@ -34,8 +34,11 @@
   "scripts": {
     "build": "rm -rf dist && tsc && tsc -p tsconfig.cjs.json",
     "prepublishOnly": "npm run build",
-    "test:prepare": "prisma db push && prisma generate",
+    "test:prepare:mysql": "prisma db push --schema ./prisma/schema.mysql.prisma && prisma generate --schema ./prisma/schema.mysql.prisma",
+    "test:prepare:postgresql": "prisma db push --schema ./prisma/schema.postgresql.prisma && prisma generate --schema ./prisma/schema.postgresql.prisma",
     "test": "vitest run",
+    "test:mysql": "npm run test:prepare:mysql && npm run test",
+    "test:postgresql": "npm run test:prepare:postgresql && npm run test",
     "lint": "eslint . && prettier --check .",
     "format": "eslint --fix . && prettier --write ."
   },

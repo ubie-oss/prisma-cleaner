@@ -7,21 +7,60 @@ on:
       - main
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install @rollup/rollup-linux-x64-gnu
+      - name: Run lint
+        run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        database: [postgresql, mysql]
+        include:
+          - database: postgresql
+            image: postgres:16
+            env:
+              POSTGRES_HOST_AUTH_METHOD: trust
+              POSTGRES_DB: prisma_cleaner
+            options: >-
+              --health-cmd pg_isready
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+            port: 5432:5432
+          - database: mysql
+            image: mysql:8
+            env:
+              MYSQL_ROOT_PASSWORD: root
+              MYSQL_DATABASE: prisma_cleaner
+              MYSQL_USER: docker
+              MYSQL_PASSWORD: docker
+            options: >-
+              --health-cmd="mysqladmin ping -h localhost -u root -proot"
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+            port: 3306:3306
+
     services:
-      medico-db:
-        image: postgres:16
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_DB: prisma_cleaner
+      database:
+        image: ${{ matrix.image }}
+        env: ${{ matrix.env }}
         ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          - ${{ matrix.port }}
+        options: ${{ matrix.options }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +72,5 @@ jobs:
         run: |
           npm ci
           npm install @rollup/rollup-linux-x64-gnu
-          npm run lint
-          npm run test:prepare
+          npm run test:prepare:${{ matrix.database }}
           npm run test

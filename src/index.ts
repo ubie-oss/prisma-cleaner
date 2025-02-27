@@ -1,26 +1,6 @@
 import { Prisma } from "@prisma/client/extension";
-
-type PrismaClientLike = {
-  $queryRawUnsafe: <T = unknown>(
-    query: string,
-    ...values: unknown[]
-  ) => Promise<T>;
-};
-
-type ModelLike = {
-  name: string;
-  dbName: string | null;
-  fields: readonly {
-    name: string;
-    kind: string;
-    type: string;
-  }[];
-};
-
-type Table = {
-  table: string;
-  schema: string;
-};
+import { DatabaseProvider, ProviderFactory } from "./providers";
+import { PrismaClientLike, PrismaCleanerOptions, Table } from "./types";
 
 const targetOperations = ["create", "createMany", "upsert"];
 
@@ -45,14 +25,9 @@ export class PrismaCleaner {
 
   private tables: Table[] | null = null;
   private schemaListByTableName: Record<string, string[]> | null = null;
+  private provider: DatabaseProvider;
 
-  constructor({
-    prisma,
-    models,
-  }: {
-    prisma: PrismaClientLike;
-    models: readonly ModelLike[] | ModelLike[];
-  }) {
+  constructor({ prisma, models, provider }: PrismaCleanerOptions) {
     this.prisma = prisma;
     this.modelsMap = new Map(
       models.map((model) => [
@@ -63,6 +38,13 @@ export class PrismaCleaner {
         },
       ]),
     );
+
+    // Determine the database provider using the hybrid approach
+    // 1. Use the explicitly provided provider if available
+    // 2. Otherwise, try to detect from Prisma client
+    // 3. If neither is available, an error will be thrown
+    const providerName = provider || this.prisma._engineConfig?.activeProvider;
+    this.provider = ProviderFactory.createProvider(providerName);
   }
 
   withCleaner() {
@@ -84,23 +66,16 @@ export class PrismaCleaner {
 
   async cleanupAllTables(): Promise<void> {
     const tables = await this.getTables();
-    const targets = tables.map(({ table, schema }) => `"${schema}"."${table}"`);
-    await this.prisma.$queryRawUnsafe(`TRUNCATE TABLE ${targets.join(", ")}`);
+    await this.provider.cleanupAllTables(
+      tables,
+      this.prisma.$queryRawUnsafe.bind(this.prisma),
+    );
   }
 
   async cleanupTables(tables: string[]): Promise<void> {
-    const targets = tables.map((target) => {
-      if (/^".*"$/.test(target)) return target;
-
-      const [schemaOrTable, table] = target.split(".");
-      if (table) {
-        return `"${schemaOrTable}"."${table}"`;
-      } else {
-        return `"${schemaOrTable}"`;
-      }
-    });
-    await this.prisma.$queryRawUnsafe(
-      `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
+    await this.provider.cleanupTables(
+      tables,
+      this.prisma.$queryRawUnsafe.bind(this.prisma),
     );
   }
 
@@ -112,23 +87,15 @@ export class PrismaCleaner {
         return this.modelsMap.get(model)?.table;
       })
       .filter((table): table is string => table != null);
+
     const schemaListByTableName = await this.getSchemaListByTableName();
 
-    // If the multiSchema feature is enabled, we don't know how to obtain the schema name from the model,
-    // so we instead get the schema name from the table name. Also, we don't know which schema the model
-    // belongs to, so we delete the table with the same name from all schemas.
-    const targets = targetTableNames
-      .flatMap((table) => {
-        return schemaListByTableName[table].map(
-          (schema) => `"${schema}"."${table}"`,
-        );
-      })
-      .filter((t) => t != null);
-    if (targets.length === 0) return;
-
-    await this.prisma.$queryRawUnsafe(
-      `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
+    await this.provider.cleanupTargetTables(
+      targetTableNames,
+      schemaListByTableName,
+      this.prisma.$queryRawUnsafe.bind(this.prisma),
     );
+
     this.cleanupTargetModels.clear();
   }
 
@@ -152,14 +119,8 @@ export class PrismaCleaner {
 
   private async getTables(): Promise<Table[]> {
     if (this.tables) return this.tables;
-
-    this.tables = await this.prisma.$queryRawUnsafe<Table[]>(
-      `
-SELECT table_name AS table, table_schema AS schema
-FROM information_schema.tables
-WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-AND table_name != '_prisma_migrations'
-  `.trim(),
+    this.tables = await this.provider.getTables(
+      this.prisma.$queryRawUnsafe.bind(this.prisma),
     );
     return this.tables;
   }
@@ -184,6 +145,10 @@ AND table_name != '_prisma_migrations'
 
       // create
       if (Array.isArray(value.create)) {
+        const field = model.fields.find((f) => f.name === key);
+        if (field) {
+          this.cleanupTargetModels.add(field.type);
+        }
         this.addTargetModelByInputData(modelName, value.create);
       } else if (isPlainObject(value.create)) {
         const field = model.fields.find((f) => f.name === key);
@@ -195,6 +160,10 @@ AND table_name != '_prisma_migrations'
 
       // connectOrCreate
       if (Array.isArray(value.connectOrCreate)) {
+        const field = model.fields.find((f) => f.name === key);
+        if (field) {
+          this.cleanupTargetModels.add(field.type);
+        }
         value.connectOrCreate.forEach((v) => {
           if (isPlainObject(v.create)) {
             this.addTargetModelByInputData(modelName, v.create);

@@ -6,9 +6,12 @@ prisma-cleaner is a prisma extension to automatically delete data when running t
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaCleaner } from "@ubie/prisma-cleaner";
 
+// The provider will be automatically detected from the Prisma client
 const cleaner = new PrismaCleaner({
   prisma: new PrismaClient(),
   models: Prisma.dmmf.datamodel.models,
+  // You can explicitly specify the provider if needed:
+  // provider: 'postgresql' // or 'mysql'
 });
 
 const prisma = new PrismaClient().$extends(cleaner.withCleaner());
@@ -17,18 +20,39 @@ const prisma = new PrismaClient().$extends(cleaner.withCleaner());
   await prisma.user.create({ ... });
 
   // Delete only user table
-  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."user" CASCADE
+  await cleaner.cleanup(); 
+  // PostgreSQL: TRUNCATE TABLE "public"."user" CASCADE
+  // MySQL: SET FOREIGN_KEY_CHECKS = 0; TRUNCATE TABLE `user`; SET FOREIGN_KEY_CHECKS = 1;
 
   await prisma.user.create({ ... });
   await prisma.comment.create({ ... });
 
   // Delete post and comment tables, user table is not included
-  await cleaner.cleanup(); // => TRUNCATE TABLE "public"."post", "public"."comment" CASCADE
+  await cleaner.cleanup(); 
+  // PostgreSQL: TRUNCATE TABLE "public"."post", "public"."comment" CASCADE
+  // MySQL: SET FOREIGN_KEY_CHECKS = 0; TRUNCATE TABLE `post`; TRUNCATE TABLE `comment`; SET FOREIGN_KEY_CHECKS = 1;
 })();
 ```
 
-> [!WARNING]
-> Currently only PostgreSQL is supported.
+> [!NOTE]
+> Supports PostgreSQL and MySQL databases.
+> 
+> You can specify the database provider in two ways:
+> 
+> 1. **Explicitly in the constructor:**
+>    ```typescript
+>    const cleaner = new PrismaCleaner({
+>      prisma: new PrismaClient(),
+>      models: Prisma.dmmf.datamodel.models,
+>      provider: 'postgresql' // or 'mysql'
+>    });
+>    ```
+> 
+> 2. **Automatic detection:**
+>    The library will automatically detect the database provider from your Prisma client configuration.
+>    This is detected from the Prisma client's internal configuration (`_engineConfig.activeProvider`).> 
+> 
+> If no provider is specified and automatic detection fails, an error will be thrown.
 
 ## Installation
 
@@ -82,6 +106,8 @@ import { PrismaCleaner } from "@ubie/prisma-cleaner";
 export const cleaner = new PrismaCleaner({
   prisma: new PrismaClient(),
   models: Prisma.dmmf.datamodel.models,
+  // You can explicitly specify the provider if needed:
+  // provider: 'postgresql' // or 'mysql'
 });
 ```
 
@@ -138,7 +164,11 @@ See more [examples](https://github.com/ubie-oss/prisma-cleaner/blob/main//exampl
 Prisma-cleaner adds tables targeted for deletion triggered by the execution of Prisma's `create`, `createMany`, `upsert`. If added via `$executeRaw` or similar, they will not be automatically deleted, so you will need to manually delete them.
 
 ```typescript
+// PostgreSQL
 await prisma.$executeRaw`INSERT INTO "User" (name) VALUES ('xxx')`;
+
+// MySQL
+// await prisma.$executeRaw`INSERT INTO \`User\` (name) VALUES ('xxx')`;
 
 // You should delete manually.
 await cleaner.cleanupTables(["User"]);
