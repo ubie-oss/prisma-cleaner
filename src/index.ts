@@ -31,6 +31,11 @@ type Table = {
   schema: string;
 };
 
+type ForeignKey = {
+  child_table: string;
+  parent_table: string;
+};
+
 const targetOperations = ["create", "createMany", "upsert"];
 
 function isPlainObject(obj: unknown): obj is Record<string, unknown> {
@@ -50,9 +55,12 @@ export class PrismaCleaner {
   private readonly strategy: CleanupStrategy;
   // model name -> set of model names it depends on (has FK to)
   private readonly dependencyGraph: Map<string, Set<string>>;
+  // table name -> model name (reverse lookup)
+  private readonly tableToModelMap: Map<string, string>;
 
   private tables: Table[] | null = null;
   private schemaListByTableName: Record<string, string[]> | null = null;
+  private dbDependenciesLoaded = false;
 
   constructor({
     prisma,
@@ -73,6 +81,9 @@ export class PrismaCleaner {
           fields: model.fields,
         },
       ]),
+    );
+    this.tableToModelMap = new Map(
+      models.map((model) => [model.dbName || model.name, model.name]),
     );
     this.dependencyGraph = this.buildDependencyGraph();
   }
@@ -165,6 +176,11 @@ export class PrismaCleaner {
   }
 
   private async cleanupWithDelete(): Promise<void> {
+    // Augment the dependency graph with FK constraints from the actual database.
+    // This catches FK relationships that exist at the DB level but are not
+    // represented in the Prisma schema (e.g., cross-module FKs in modular monoliths).
+    await this.augmentDependencyGraphFromDB();
+
     // Expand the target set to include all models that transitively depend on
     // the tracked models (i.e., have FK references to them). This matches
     // TRUNCATE CASCADE behavior where dependent rows are automatically removed.
@@ -216,6 +232,42 @@ AND table_name != '_prisma_migrations'
   `.trim(),
     );
     return this.tables;
+  }
+
+  // Augment the dependency graph with FK constraints from the actual database.
+  // The Prisma DMMF only contains relations explicitly defined in the schema,
+  // but the database may have additional FK constraints (e.g., cross-module FKs
+  // in modular monoliths where @relation is intentionally omitted).
+  private async augmentDependencyGraphFromDB(): Promise<void> {
+    if (this.dbDependenciesLoaded) return;
+    this.dbDependenciesLoaded = true;
+
+    const fks = await this.prisma.$queryRawUnsafe<ForeignKey[]>(
+      `
+SELECT DISTINCT
+  tc.table_name AS child_table,
+  ccu.table_name AS parent_table
+FROM information_schema.table_constraints tc
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name
+  AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_name != ccu.table_name
+    `.trim(),
+    );
+
+    for (const fk of fks) {
+      const childModel = this.tableToModelMap.get(fk.child_table);
+      const parentModel = this.tableToModelMap.get(fk.parent_table);
+      if (childModel && parentModel) {
+        let deps = this.dependencyGraph.get(childModel);
+        if (!deps) {
+          deps = new Set();
+          this.dependencyGraph.set(childModel, deps);
+        }
+        deps.add(parentModel);
+      }
+    }
   }
 
   // Given a set of model names, expand to include all models that transitively

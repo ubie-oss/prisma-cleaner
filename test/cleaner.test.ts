@@ -157,6 +157,51 @@ describe.each(strategies)("PrismaCleaner (strategy: %s)", (strategy) => {
   });
 });
 
+describe("PrismaCleaner delete strategy with DB-level FK augmentation", () => {
+  // Strip relationFromFields to simulate models where @relation is intentionally
+  // omitted (e.g., cross-module FKs in modular monoliths). The DMMF-based dependency
+  // graph will be empty, so augmentDependencyGraphFromDB must fill in the gaps.
+  const modelsWithoutRelations = Prisma.dmmf.datamodel.models.map((model) => ({
+    ...model,
+    fields: model.fields.map((field) => ({
+      ...field,
+      relationFromFields: undefined,
+    })),
+  }));
+
+  const cleaner = new PrismaCleaner({
+    prisma: new PrismaClient(),
+    models: modelsWithoutRelations,
+    strategy: "delete",
+  });
+  const prisma = new PrismaClient().$extends(cleaner.withCleaner());
+
+  beforeAll(async () => {
+    await cleaner.cleanupAllTables();
+  });
+
+  test("resolves FK ordering from DB when DMMF relations are missing", async () => {
+    await prisma.post.create({
+      data: {
+        title: "test",
+        content: "test",
+        comment: {
+          create: [{ body: "comment1" }, { body: "comment2" }],
+        },
+      },
+    });
+
+    expect(await prisma.post.count()).toBe(1);
+    expect(await prisma.comment.count()).toBe(2);
+
+    // Without augmentDependencyGraphFromDB, this would fail with FK violation
+    // because the cleaner wouldn't know comments depend on posts
+    await cleaner.cleanup();
+    expect(await prisma.post.count()).toBe(0);
+    expect(await prisma.comment.count()).toBe(0);
+  });
+});
+
 describe("PrismaCleaner cleanup options override", () => {
   const cleaner = new PrismaCleaner({
     prisma: new PrismaClient(),
