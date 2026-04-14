@@ -250,7 +250,7 @@ SELECT DISTINCT
 FROM information_schema.table_constraints tc
 JOIN information_schema.constraint_column_usage ccu
   ON ccu.constraint_name = tc.constraint_name
-  AND ccu.table_schema = tc.table_schema
+  AND ccu.constraint_schema = tc.constraint_schema
 WHERE tc.constraint_type = 'FOREIGN KEY'
   AND tc.table_name != ccu.table_name
     `.trim(),
@@ -302,7 +302,8 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
         if (
           field.kind === "object" &&
           field.relationFromFields &&
-          field.relationFromFields.length > 0
+          field.relationFromFields.length > 0 &&
+          field.type !== modelName // Skip self-referential relations to avoid cycles in topological sort
         ) {
           dependsOn.get(modelName)?.add(field.type);
         }

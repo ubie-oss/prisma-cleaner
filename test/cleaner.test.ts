@@ -202,6 +202,34 @@ describe("PrismaCleaner delete strategy with DB-level FK augmentation", () => {
   });
 });
 
+describe("PrismaCleaner delete strategy with self-referential FK", () => {
+  const cleaner = new PrismaCleaner({
+    prisma: new PrismaClient(),
+    models: Prisma.dmmf.datamodel.models,
+    strategy: "delete",
+  });
+  const prisma = new PrismaClient().$extends(cleaner.withCleaner());
+
+  beforeAll(async () => {
+    await cleaner.cleanupAllTables();
+  });
+
+  test("handles self-referential relation without skipping the model", async () => {
+    const parent = await prisma.user.create({
+      data: { name: "parent" },
+    });
+    await prisma.user.create({
+      data: { name: "child", parentId: parent.id },
+    });
+    expect(await prisma.user.count()).toBe(2);
+
+    // Without the self-loop fix, Kahn's algorithm would never process User
+    // because it would have a permanent in-degree of 1 from itself
+    await cleaner.cleanup();
+    expect(await prisma.user.count()).toBe(0);
+  });
+});
+
 describe("PrismaCleaner cleanup options override", () => {
   const cleaner = new PrismaCleaner({
     prisma: new PrismaClient(),

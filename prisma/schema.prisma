@@ -8,10 +8,13 @@ datasource db {
 }
 
 model User {
-  id      Int       @id @default(autoincrement())
-  name    String
-  posts   Post[]
-  comment Comment[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  posts    Post[]
+  comment  Comment[]
+  parent   User?     @relation("UserParent", fields: [parentId], references: [id])
+  parentId Int?
+  children User[]    @relation("UserParent")
 }
 
 model Post {
