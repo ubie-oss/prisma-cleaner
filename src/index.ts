@@ -181,9 +181,7 @@ export class PrismaCleaner {
       if (!schemas) continue;
 
       for (const schema of schemas) {
-        await this.prisma.$queryRawUnsafe(
-          `DELETE FROM "${schema}"."${table}"`,
-        );
+        await this.prisma.$queryRawUnsafe(`DELETE FROM "${schema}"."${table}"`);
       }
     }
   }
