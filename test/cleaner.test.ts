@@ -1,11 +1,14 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { describe, test, beforeAll, expect } from "vitest";
-import { PrismaCleaner } from "../src";
+import { PrismaCleaner, CleanupStrategy } from "../src";
 
-describe("PrismaCleaner", () => {
+const strategies: CleanupStrategy[] = ["truncate", "delete"];
+
+describe.each(strategies)("PrismaCleaner (strategy: %s)", (strategy) => {
   const cleaner = new PrismaCleaner({
     prisma: new PrismaClient(),
     models: Prisma.dmmf.datamodel.models,
+    strategy,
   });
   const prisma = new PrismaClient().$extends(cleaner.withCleaner());
 
@@ -150,6 +153,37 @@ describe("PrismaCleaner", () => {
 
     await insert();
     await cleaner.cleanupTables([`"public"."User"`]);
+    expect(await prisma.user.count()).toBe(0);
+  });
+});
+
+describe("PrismaCleaner cleanup options override", () => {
+  const cleaner = new PrismaCleaner({
+    prisma: new PrismaClient(),
+    models: Prisma.dmmf.datamodel.models,
+    strategy: "truncate",
+  });
+  const prisma = new PrismaClient().$extends(cleaner.withCleaner());
+
+  beforeAll(async () => {
+    await cleaner.cleanupAllTables();
+  });
+
+  test("override strategy at cleanup call", async () => {
+    await prisma.user.create({
+      data: { name: "xxx" },
+    });
+    expect(await prisma.user.count()).toBe(1);
+
+    await cleaner.cleanup({ strategy: "delete" });
+    expect(await prisma.user.count()).toBe(0);
+  });
+
+  test("override strategy at cleanupTables call", async () => {
+    await prisma.$executeRaw`insert into "User" (name) values ('xxx')`;
+    expect(await prisma.user.count()).toBe(1);
+
+    await cleaner.cleanupTables(["User"], { strategy: "delete" });
     expect(await prisma.user.count()).toBe(0);
   });
 });

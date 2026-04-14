@@ -7,14 +7,23 @@ type PrismaClientLike = {
   ) => Promise<T>;
 };
 
+type FieldLike = {
+  name: string;
+  kind: string;
+  type: string;
+  relationFromFields?: readonly string[];
+};
+
 type ModelLike = {
   name: string;
   dbName: string | null;
-  fields: readonly {
-    name: string;
-    kind: string;
-    type: string;
-  }[];
+  fields: readonly FieldLike[];
+};
+
+export type CleanupStrategy = "delete" | "truncate";
+
+export type CleanupOptions = {
+  strategy?: CleanupStrategy;
 };
 
 type Table = {
@@ -35,13 +44,12 @@ export class PrismaCleaner {
     string, // model name
     {
       table: string;
-      fields: readonly {
-        name: string;
-        kind: string;
-        type: string;
-      }[];
+      fields: readonly FieldLike[];
     }
   >();
+  private readonly strategy: CleanupStrategy;
+  // model name -> set of model names it depends on (has FK to)
+  private readonly dependencyGraph: Map<string, Set<string>>;
 
   private tables: Table[] | null = null;
   private schemaListByTableName: Record<string, string[]> | null = null;
@@ -49,11 +57,14 @@ export class PrismaCleaner {
   constructor({
     prisma,
     models,
+    strategy = "truncate",
   }: {
     prisma: PrismaClientLike;
     models: readonly ModelLike[] | ModelLike[];
+    strategy?: CleanupStrategy;
   }) {
     this.prisma = prisma;
+    this.strategy = strategy;
     this.modelsMap = new Map(
       models.map((model) => [
         model.name,
@@ -63,6 +74,7 @@ export class PrismaCleaner {
         },
       ]),
     );
+    this.dependencyGraph = this.buildDependencyGraph();
   }
 
   withCleaner() {
@@ -88,7 +100,11 @@ export class PrismaCleaner {
     await this.prisma.$queryRawUnsafe(`TRUNCATE TABLE ${targets.join(", ")}`);
   }
 
-  async cleanupTables(tables: string[]): Promise<void> {
+  async cleanupTables(
+    tables: string[],
+    options?: CleanupOptions,
+  ): Promise<void> {
+    const strategy = options?.strategy ?? this.strategy;
     const targets = tables.map((target) => {
       if (/^".*"$/.test(target)) return target;
 
@@ -99,18 +115,35 @@ export class PrismaCleaner {
         return `"${schemaOrTable}"`;
       }
     });
-    await this.prisma.$queryRawUnsafe(
-      `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
-    );
+
+    if (strategy === "delete") {
+      for (const target of targets) {
+        await this.prisma.$queryRawUnsafe(`DELETE FROM ${target}`);
+      }
+    } else {
+      await this.prisma.$queryRawUnsafe(
+        `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
+      );
+    }
   }
 
-  async cleanup(): Promise<void> {
+  async cleanup(options?: CleanupOptions): Promise<void> {
     if (this.cleanupTargetModels.size === 0) return;
 
+    const strategy = options?.strategy ?? this.strategy;
+
+    if (strategy === "delete") {
+      await this.cleanupWithDelete();
+    } else {
+      await this.cleanupWithTruncate();
+    }
+
+    this.cleanupTargetModels.clear();
+  }
+
+  private async cleanupWithTruncate(): Promise<void> {
     const targetTableNames = Array.from(this.cleanupTargetModels)
-      .map((model) => {
-        return this.modelsMap.get(model)?.table;
-      })
+      .map((model) => this.modelsMap.get(model)?.table)
       .filter((table): table is string => table != null);
     const schemaListByTableName = await this.getSchemaListByTableName();
 
@@ -129,7 +162,30 @@ export class PrismaCleaner {
     await this.prisma.$queryRawUnsafe(
       `TRUNCATE TABLE ${targets.join(", ")} CASCADE`,
     );
-    this.cleanupTargetModels.clear();
+  }
+
+  private async cleanupWithDelete(): Promise<void> {
+    // Expand the target set to include all models that transitively depend on
+    // the tracked models (i.e., have FK references to them). This matches
+    // TRUNCATE CASCADE behavior where dependent rows are automatically removed.
+    const modelNames = this.expandWithDependents(
+      Array.from(this.cleanupTargetModels),
+    );
+    const sorted = this.getDeleteOrder(modelNames);
+    const schemaListByTableName = await this.getSchemaListByTableName();
+
+    for (const modelName of sorted) {
+      const table = this.modelsMap.get(modelName)?.table;
+      if (!table) continue;
+      const schemas = schemaListByTableName[table];
+      if (!schemas) continue;
+
+      for (const schema of schemas) {
+        await this.prisma.$queryRawUnsafe(
+          `DELETE FROM "${schema}"."${table}"`,
+        );
+      }
+    }
   }
 
   private async getSchemaListByTableName(): Promise<Record<string, string[]>> {
@@ -162,6 +218,104 @@ AND table_name != '_prisma_migrations'
   `.trim(),
     );
     return this.tables;
+  }
+
+  // Given a set of model names, expand to include all models that transitively
+  // depend on them (have FK references pointing to them). This ensures that
+  // DELETE operations clean up child rows before parent rows, matching CASCADE behavior.
+  private expandWithDependents(modelNames: string[]): string[] {
+    const expanded = new Set(modelNames);
+    const queue = [...modelNames];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const [name, deps] of this.dependencyGraph) {
+        if (deps.has(current) && !expanded.has(name)) {
+          expanded.add(name);
+          queue.push(name);
+        }
+      }
+    }
+
+    return Array.from(expanded);
+  }
+
+  private buildDependencyGraph(): Map<string, Set<string>> {
+    const dependsOn = new Map<string, Set<string>>();
+
+    for (const [modelName] of this.modelsMap) {
+      dependsOn.set(modelName, new Set());
+    }
+
+    for (const [modelName, modelData] of this.modelsMap) {
+      for (const field of modelData.fields) {
+        if (
+          field.kind === "object" &&
+          field.relationFromFields &&
+          field.relationFromFields.length > 0
+        ) {
+          dependsOn.get(modelName)?.add(field.type);
+        }
+      }
+    }
+
+    return dependsOn;
+  }
+
+  // Returns model names in deletion order (children first, parents last) using Kahn's algorithm
+  // on the reversed dependency graph.
+  private getDeleteOrder(modelNames: string[]): string[] {
+    const targetSet = new Set(modelNames);
+
+    // Build in-degree map on the reversed graph: for deletion, we process
+    // models that have no dependents first (leaf tables), then work up to parents.
+    // "dependents" here means models that have FK references TO this model.
+    const inDegree = new Map<string, number>();
+    // dependents: model -> list of models that depend on it (have FK to it)
+    const dependents = new Map<string, string[]>();
+
+    for (const name of modelNames) {
+      inDegree.set(name, 0);
+      dependents.set(name, []);
+    }
+
+    for (const name of modelNames) {
+      const deps = this.dependencyGraph.get(name);
+      if (!deps) continue;
+      for (const dep of deps) {
+        if (targetSet.has(dep)) {
+          // 'name' depends on 'dep', so 'name' is a dependent of 'dep'
+          // In the reversed graph, 'name' must come before 'dep'
+          // So 'dep' has an in-degree from 'name'
+          inDegree.set(dep, (inDegree.get(dep) ?? 0) + 1);
+          dependents.get(name)!.push(dep);
+        }
+      }
+    }
+
+    // Start with models that have no dependents in the target set (leaf tables)
+    const queue: string[] = [];
+    for (const [name, degree] of inDegree) {
+      if (degree === 0) {
+        queue.push(name);
+      }
+    }
+
+    const result: string[] = [];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      result.push(current);
+
+      for (const parent of dependents.get(current) ?? []) {
+        const newDegree = (inDegree.get(parent) ?? 1) - 1;
+        inDegree.set(parent, newDegree);
+        if (newDegree === 0) {
+          queue.push(parent);
+        }
+      }
+    }
+
+    return result;
   }
 
   private addTargetModelByArgs(modelName: string, args: unknown): void {

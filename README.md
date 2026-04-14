@@ -144,6 +144,34 @@ await prisma.$executeRaw`INSERT INTO "User" (name) VALUES ('xxx')`;
 await cleaner.cleanupTables(["User"]);
 ```
 
+### Cleanup strategy
+
+By default, `cleanup()` uses `TRUNCATE ... CASCADE` to delete data. When the number of tables grows, `TRUNCATE CASCADE` can become a performance bottleneck because PostgreSQL acquires `AccessExclusiveLock` on all tables involved in the cascade, even those unrelated to your test.
+
+You can switch to the `"delete"` strategy, which uses `DELETE FROM` with topological ordering based on foreign key dependencies. This avoids cascade locks entirely and is typically faster for small test datasets.
+
+```typescript
+// Set strategy at construction time
+const cleaner = new PrismaCleaner({
+  prisma: new PrismaClient(),
+  models: Prisma.dmmf.datamodel.models,
+  strategy: "delete", // default: "truncate"
+});
+```
+
+You can also override the strategy per call:
+
+```typescript
+// Use "delete" for this specific cleanup, regardless of the constructor setting
+await cleaner.cleanup({ strategy: "delete" });
+await cleaner.cleanupTables(["User"], { strategy: "delete" });
+```
+
+| Strategy | Method | Cascade handling | Best for |
+|---|---|---|---|
+| `"truncate"` (default) | `TRUNCATE TABLE ... CASCADE` | PostgreSQL CASCADE | Backward compatibility |
+| `"delete"` | `DELETE FROM` in FK order | Topological sort | Large schemas, many tables |
+
 ## License
 
 [MIT License](https://github.com/ubie-oss/prisma-cleaner/blob/main/LICENSE).
