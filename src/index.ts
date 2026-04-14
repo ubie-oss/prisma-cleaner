@@ -225,10 +225,12 @@ export class PrismaCleaner {
 
     this.tables = await this.prisma.$queryRawUnsafe<Table[]>(
       `
-SELECT table_name AS table, table_schema AS schema
-FROM information_schema.tables
-WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-AND table_name != '_prisma_migrations'
+SELECT c.relname AS table, n.nspname AS schema
+FROM pg_class c
+JOIN pg_namespace n ON c.relnamespace = n.oid
+WHERE c.relkind = 'r'
+AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+AND c.relname != '_prisma_migrations'
   `.trim(),
     );
     return this.tables;
@@ -245,14 +247,13 @@ AND table_name != '_prisma_migrations'
     const fks = await this.prisma.$queryRawUnsafe<ForeignKey[]>(
       `
 SELECT DISTINCT
-  tc.table_name AS child_table,
-  ccu.table_name AS parent_table
-FROM information_schema.table_constraints tc
-JOIN information_schema.constraint_column_usage ccu
-  ON ccu.constraint_name = tc.constraint_name
-  AND ccu.constraint_schema = tc.constraint_schema
-WHERE tc.constraint_type = 'FOREIGN KEY'
-  AND tc.table_name != ccu.table_name
+  child.relname AS child_table,
+  parent.relname AS parent_table
+FROM pg_constraint con
+JOIN pg_class child ON con.conrelid = child.oid
+JOIN pg_class parent ON con.confrelid = parent.oid
+WHERE con.contype = 'f'
+  AND child.relname != parent.relname
     `.trim(),
     );
 
